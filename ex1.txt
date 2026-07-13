@@ -1,0 +1,77 @@
+#include <stdio.h>
+#include <string.h>
+
+#define SOF 'S'
+#define EOFM 'E'
+#define ESC 'X'
+
+int main() {
+    char data[100], stuffed[300], received[300], destuffed[100];
+    int i, j = 0, k = 0;
+
+    printf("Enter the data: ");
+    scanf("%s", data);
+
+    // Byte Stuffing
+    stuffed[j++] = SOF;
+
+    for (i = 0; data[i] != '\0'; i++) {
+        if (data[i] == SOF || data[i] == EOFM || data[i] == ESC) {
+            stuffed[j++] = ESC;
+        }
+        stuffed[j++] = data[i];
+    }
+
+    stuffed[j++] = EOFM;
+    stuffed[j] = '\0';
+
+    printf("\nOriginal Data      : %s", data);
+    printf("\nStuffed Frame      : %s", stuffed);
+
+    // Simulate transmission
+    strcpy(received, stuffed);
+
+    char ch;
+    printf("\n\nDo you want to introduce an error? (y/n): ");
+    scanf(" %c", &ch);
+
+    if (ch == 'y' || ch == 'Y') {
+        int pos;
+        char newChar;
+
+        printf("Enter position to modify (0 to %ld): ", strlen(received) - 1);
+        scanf("%d", &pos);
+
+        if (pos >= 0 && pos < strlen(received)) {
+            printf("Enter new character: ");
+            scanf(" %c", &newChar);
+            received[pos] = newChar;
+        }
+    }
+
+    printf("\nTransmitted Frame  : %s", stuffed);
+    printf("\nReceived Frame     : %s", received);
+
+    // Check Frame
+    if (received[0] != SOF || received[strlen(received) - 1] != EOFM) {
+        printf("\n\nFrame Error Detected!");
+        return 0;
+    }
+
+    // Byte De-stuffing
+    for (i = 1; i < strlen(received) - 1; i++) {
+        if (received[i] == ESC) {
+            i++;
+            if (i < strlen(received) - 1)
+                destuffed[k++] = received[i];
+        } else {
+            destuffed[k++] = received[i];
+        }
+    }
+
+    destuffed[k] = '\0';
+
+    printf("\nRecovered Data     : %s", destuffed);
+
+    return 0;
+}
