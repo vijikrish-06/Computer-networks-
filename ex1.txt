@@ -1,3 +1,5 @@
+EX1:
+It is byte stuffing and destuffing problem
 #include <stdio.h>
 #include <string.h>
 
