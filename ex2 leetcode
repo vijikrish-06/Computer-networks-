@@ -1,0 +1,146 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+char* addBinary(char* a, char* b) {
+    int len_a = strlen(a);
+    int len_b = strlen(b);
+    
+    // The maximum possible length of the sum is the larger length + 1 (for a final carry)
+    int max_len = (len_a > len_b ? len_a : len_b) + 1;
+    
+    // Allocate memory for the string + 1 extra byte for the null terminator '\0'
+    char* result = (char*)malloc((max_len + 1) * sizeof(char));
+    result[max_len] = '\0'; // Place the null terminator at the very end
+    
+    int i = len_a - 1; // Pointer for string a
+    int j = len_b - 1; // Pointer for string b
+    int k = max_len - 1; // Pointer for the result string
+    int carry = 0;
+    
+    // Loop backwards until both strings are exhausted AND there is no remaining carry
+    while (i >= 0 || j >= 0 || carry > 0) {
+        int sum = carry;
+        
+        if (i >= 0) {
+            sum += a[i] - '0'; // Convert character '0' or '1' to integer 0 or 1
+            i--;
+        }
+        if (j >= 0) {
+            sum += b[j] - '0'; // Convert character '0' or '1' to integer 0 or 1
+            j--;
+        }
+        
+        carry = sum / 2;             // Calculate the new carry (1 if sum is 2 or 3)
+        result[k] = (sum % 2) + '0';   // Store the bit character ('0' or '1')
+        k--;
+    }
+    
+    // If the leftmost slot (index 0) was NOT used by a final carry, 
+    // shift the entire string left by 1 to remove the leading empty slot
+    if (k == 0) {
+        memmove(result, result + 1, max_len);
+    }
+    
+    return result;
+}
+
+
+Input
+a =
+"11"
+b =
+"1"
+Output
+"100"
+Expected
+"100"
+
+#693
+#include <stdbool.h>
+
+bool hasAlternatingBits(int n) {
+    // Shift n right by 1 to align opposite bits next to each other
+    // Using unsigned long to prevent integer overflow during the addition step
+    unsigned long x = n ^ (n >> 1);
+    
+    // Check if x is of the form 2^k - 1 (all 1s in binary)
+    return (x & (x + 1)) == 0;
+}
+Input
+n =
+5
+Output
+true
+Expected
+true
+
+#898
+#include <stdlib.h>
+
+// Comparison function for qsort to remove duplicates
+int compare(const void* a, const void* b) {
+    return (*(int*)a - *(int*)b);
+}
+
+int subarrayBitwiseORs(int* arr, int arrSize) {
+    // Array to store all unique global OR results discovered so far
+    int* global_ans = (int*)malloc(arrSize * 32 * sizeof(int));
+    int global_size = 0;
+
+    // Buffers to track OR results ending at the previous and current element
+    int prev_res[32];
+    int prev_size = 0;
+    
+    int curr_res[32];
+
+    for (int i = 0; i < arrSize; i++) {
+        int curr_size = 0;
+        
+        // 1. Every element forms a subarray of length 1 by itself
+        curr_res[curr_size++] = arr[i];
+        
+        // 2. Compute ORs with all results ending at the previous position
+        for (int j = 0; j < prev_size; j++) {
+            int or_val = prev_res[j] | arr[i];
+            
+            // Deduplicate on the fly: only add if it's different from the last added value
+            if (or_val != curr_res[curr_size - 1]) {
+                curr_res[curr_size++] = or_val;
+            }
+        }
+        
+        // 3. Save current results into both the global list and the 'prev' buffer for the next iteration
+        for (int j = 0; j < curr_size; j++) {
+            global_ans[global_size++] = curr_res[j];
+            prev_res[j] = curr_res[j];
+        }
+        prev_size = curr_size;
+    }
+
+    // 4. Sort the global results array to group duplicates together
+    qsort(global_ans, global_size, sizeof(int), compare);
+
+    // 5. Count the unique entries in the sorted global array
+    if (global_size == 0) {
+        free(global_ans);
+        return 0;
+    }
+    
+    int unique_count = 1;
+    for (int i = 1; i < global_size; i++) {
+        if (global_ans[i] != global_ans[i - 1]) {
+            unique_count++;
+        }
+    }
+
+    free(global_ans);
+    return unique_count;
+}
+Input
+arr =
+[0]
+Output
+1
+Expected
+1
