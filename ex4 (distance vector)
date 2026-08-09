@@ -1,0 +1,216 @@
+
+#include <stdio.h>
+#include <string.h>
+
+#define MAX 10
+#define INF 999
+
+int n;
+char name[MAX][20];
+int cost[MAX][MAX];      /* cost[i][j] = cost from i to j            */
+int nextHop[MAX][MAX];   /* nextHop[i][j] = index of next router      */
+
+/* ---------- Utility: print routing table of a single router ---------- */
+void displayTable(int i)
+{
+    printf("\nRouting Table of Router %s\n", name[i]);
+    printf("%-12s%-12s%-12s\n", "Destination", "Cost", "NextHop");
+    for (int j = 0; j < n; j++)
+    {
+        if (i == j) continue;
+        printf("%-12s", name[j]);
+
+        if (cost[i][j] >= INF)
+            printf("%-12s%-12s\n", "INF", "-");
+        else
+            printf("%-12d%-12s\n", cost[i][j], name[nextHop[i][j]]);
+    }
+}
+
+/* ---------- Display tables for all routers ---------- */
+void displayAllTables()
+{
+    for (int i = 0; i < n; i++)
+        displayTable(i);
+}
+
+/* ---------- Display full cost matrix (grid form, like the notebook table) ----------
+   Rows = "Information Stored" by router i, Columns = destination j
+   Cell [i][j] = shortest known cost from i to j                                     */
+void displayMatrix(const char *title)
+{
+    printf("\n================ %s ================\n\n", title);
+
+    /* header row */
+    printf("%-14s", "Info Stored");
+    for (int j = 0; j < n; j++)
+        printf("%-6s", name[j]);
+    printf("\n");
+
+    for (int i = 0; i < n; i++)
+    {
+        printf("%-14s", name[i]);
+        for (int j = 0; j < n; j++)
+        {
+            if (cost[i][j] >= INF)
+                printf("%-6s", "INF");
+            else
+                printf("%-6d", cost[i][j]);
+        }
+        printf("\n");
+    }
+}
+
+/* ---------- Step 1: Read input (nodes, names, links, costs) ---------- */
+void readInput()
+{
+    printf("Enter number of nodes: ");
+    scanf("%d", &n);
+
+    printf("Enter node names:\n");
+    for (int i = 0; i < n; i++)
+        scanf("%s", name[i]);
+
+    /* Initialize cost matrix */
+    for (int i = 0; i < n; i++)
+    {
+        for (int j = 0; j < n; j++)
+        {
+            if (i == j)
+                cost[i][j] = 0;
+            else
+                cost[i][j] = INF;
+        }
+    }
+
+    /* Ask link status and cost for every unique pair */
+    for (int i = 0; i < n; i++)
+    {
+        for (int j = i + 1; j < n; j++)
+        {
+            int link, c;
+            printf("Is there a link between %s and %s? (1-Yes, 0-No): ",
+                   name[i], name[j]);
+            scanf("%d", &link);
+
+            if (link == 1)
+            {
+                printf("Enter cost: ");
+                scanf("%d", &c);
+                cost[i][j] = c;
+                cost[j][i] = c;
+            }
+            else
+            {
+                cost[i][j] = INF;
+                cost[j][i] = INF;
+            }
+        }
+    }
+}
+
+/* ---------- Step 2: Build initial routing tables (direct neighbors) ---------- */
+void initTables()
+{
+    for (int i = 0; i < n; i++)
+    {
+        for (int j = 0; j < n; j++)
+        {
+            if (i == j)
+                nextHop[i][j] = i;
+            else if (cost[i][j] < INF)
+                nextHop[i][j] = j;   /* direct neighbor */
+            else
+                nextHop[i][j] = -1;  /* unknown */
+        }
+    }
+}
+
+/* ---------- Step 3: Distance Vector Algorithm (Bellman-Ford based) ---------- */
+void runDistanceVector()
+{
+    int updated = 1;
+
+    /* Repeat until no router's table changes (convergence) */
+    while (updated)
+    {
+        updated = 0;
+
+        for (int i = 0; i < n; i++)          /* router i */
+        {
+            for (int j = 0; j < n; j++)      /* neighbor j of i */
+            {
+                if (i == j || cost[i][j] >= INF)
+                    continue;
+
+                for (int k = 0; k < n; k++)  /* destination k */
+                {
+                    if (i == k) continue;
+
+                    if (cost[j][k] < INF &&
+                        cost[i][j] + cost[j][k] < cost[i][k])
+                    {
+                        cost[i][k] = cost[i][j] + cost[j][k];
+                        nextHop[i][k] = j;
+                        updated = 1;
+                    }
+                }
+            }
+        }
+    }
+}
+
+/* ---------- Main Menu ---------- */
+int main()
+{
+    readInput();
+    initTables();
+
+    /* Initial Routing Table -- matrix form, straight from direct link costs */
+    displayMatrix("INITIAL ROUTING TABLE");
+
+    runDistanceVector();
+
+    /* Final Routing Table -- matrix form, after convergence (like the notebook photo) */
+    displayMatrix("FINAL ROUTING TABLE");
+
+    int choice;
+    do
+    {
+        printf("\n----- MENU -----\n");
+        printf("1. Display final table of one router\n");
+        printf("2. Display final tables of all routers\n");
+        printf("3. Display final routing table (matrix form)\n");
+        printf("4. Exit\n");
+        printf("Enter choice: ");
+        scanf("%d", &choice);
+
+        if (choice == 1)
+        {
+            char rname[20];
+            printf("Enter router name: ");
+            scanf("%s", rname);
+
+            int idx = -1;
+            for (int i = 0; i < n; i++)
+                if (strcmp(name[i], rname) == 0) { idx = i; break; }
+
+            if (idx == -1)
+                printf("Invalid router name!\n");
+            else
+                displayTable(idx);
+        }
+        else if (choice == 2)
+        {
+            displayAllTables();
+        }
+        else if (choice == 3)
+        {
+            displayMatrix("FINAL ROUTING TABLE");
+        }
+
+    } while (choice != 4);
+
+    printf("\nProgram terminated. Final result displayed above.\n");
+    return 0;
+}.     Sample test case
