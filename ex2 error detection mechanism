@@ -1,0 +1,966 @@
+#include <stdio.h>
+#include <string.h>
+
+int main() {
+    char inputString[100];
+    int choice, length;
+
+    int rawDataBits[100][7];
+    int frames[100][8];
+    char finalOutput[100];
+
+    printf("==================================================\n");
+    printf("   1D PARITY STRING TRANSMISSION SYSTEM (8-BIT)   \n");
+    printf("==================================================\n");
+
+    printf("\nEnter input string: ");
+    fgets(inputString, sizeof(inputString), stdin);
+    inputString[strcspn(inputString, "\n")] = '\0';
+    length = strlen(inputString);
+
+    printf("Choose Parity (1. Even Parity / 2. Odd Parity): ");
+    scanf("%d", &choice);
+
+    /* ================= SENDER SIDE ================= */
+    printf("\n---- SENDER'S SIDE ----\n");
+    printf("Input Data String        : %s\n", inputString);
+
+    // Convert string to 7-bit ASCII
+    for (int i = 0; i < length; i++) {
+        int temp = (int)inputString[i] & 0x7F;
+        for (int j = 6; j >= 0; j--) {
+            rawDataBits[i][j] = temp % 2;
+            temp /= 2;
+        }
+    }
+
+    printf("7-Bit Raw Binary Data    : ");
+    for (int i = 0; i < length; i++) {
+        for (int j = 0; j < 7; j++) {
+            printf("%d", rawDataBits[i][j]);
+        }
+        printf("  ");
+    }
+    printf("\n");
+
+    // Generate parity for each 7-bit block to build 8-bit frames
+    for (int i = 0; i < length; i++) {
+        int onesCount = 0;
+        for (int j = 0; j < 7; j++) {
+            frames[i][j] = rawDataBits[i][j];
+            if (frames[i][j] == 1) onesCount++;
+        }
+        frames[i][7] = (choice == 1) ? (onesCount % 2 != 0) : (onesCount % 2 == 0);
+    }
+
+    printf("Transmitted Codewords    : ");
+    for (int i = 0; i < length; i++) {
+        for (int j = 0; j < 8; j++) {
+            printf("%d", frames[i][j]);
+        }
+        printf("  ");
+    }
+    printf("\n");
+
+    /* ================= ERROR INDUCTION ================= */
+    printf("\n---- ERROR INDUCTION ----\n");
+    printf("Select Error Type:\n0. No Error\n1. Single-Bit Error\n2. Multi-Bit / Burst Error\nEnter choice: ");
+
+    int errorType;
+    scanf("%d", &errorType);
+
+    if (errorType == 1) {
+        int targetBlock, targetBit;
+        printf("Enter Block Number (1 to %d): ", length);
+        scanf("%d", &targetBlock);
+        printf("Enter Bit Position to Flip (0 to 7): ");
+        scanf("%d", &targetBit);
+
+        if (targetBlock >= 1 && targetBlock <= length && targetBit >= 0 && targetBit <= 7) {
+            frames[targetBlock - 1][targetBit] ^= 1;
+            printf("  -> Flipped Bit %d in Block %d.\n", targetBit, targetBlock);
+        }
+    } 
+    else if (errorType == 2) {
+        int totalFlips;
+        printf("How many bits to flip?: ");
+        scanf("%d", &totalFlips);
+
+        for (int flip = 1; flip <= totalFlips; flip++) {
+            int targetBlock, targetBit;
+            printf("[Flip %d] Enter Block Number (1-%d) & Bit Position (0-7): ", flip, length);
+            scanf("%d %d", &targetBlock, &targetBit);
+
+            if (targetBlock >= 1 && targetBlock <= length && targetBit >= 0 && targetBit <= 7) {
+                frames[targetBlock - 1][targetBit] ^= 1;
+                printf("  -> Flipped Bit %d in Block %d.\n", targetBit, targetBlock);
+            }
+        }
+    }
+
+    /* ================= RECEIVER SIDE (GLOBAL COMBINED CHECK) ================= */
+    printf("\n---- RECEIVER'S SIDE ----\n");
+    printf("Received Codewords       : ");
+    
+    int globalOnesCount = 0;
+    for (int i = 0; i < length; i++) {
+        int asciiRecovered = 0;
+        for (int j = 0; j < 8; j++) {
+            printf("%d", frames[i][j]);
+            if (frames[i][j] == 1) globalOnesCount++;
+            if (j < 7) {
+                asciiRecovered = (asciiRecovered << 1) | frames[i][j];
+            }
+        }
+        finalOutput[i] = (char)asciiRecovered;
+        printf("  ");
+    }
+    printf("\n");
+
+    // Global combined parity verification
+    int isParityValid = 0;
+    if (choice == 1) // Even Parity: Total 1s in combined stream must be even
+        isParityValid = (globalOnesCount % 2 == 0);
+    else             // Odd Parity: Total 1s in combined stream must be odd
+        isParityValid = (globalOnesCount % 2 != 0);
+
+    finalOutput[length] = '\0';
+
+    /* ================= TRANSMISSION RESULT ================= */
+    printf("\n---- TRANSMISSION RESULT ----\n");
+    if (!isParityValid) {
+        printf("Result         : ERROR DETECTED! Stream discarded due to parity violation.\n");
+    } else {
+        printf("Result         : NO ERROR DETECTED.\n");
+        printf("Extracted Data : %s\n", finalOutput);
+    }
+
+    return 0;
+}
+[24bcs033@mepcolinux EX2]$ cat parity.c 
+cc
+
+[24bcs033@mepcolinux EX2]$ ./PAR
+==================================================
+   1D PARITY STRING TRANSMISSION SYSTEM (8-BIT)   
+==================================================
+
+Enter input string: hello
+Choose Parity (1. Even Parity / 2. Odd Parity): 1
+
+---- SENDER'S SIDE ----
+Input Data String        : hello
+7-Bit Raw Binary Data    : 1101000  1100101  1101100  1101100  1101111  
+Transmitted Codewords    : 11010001  11001010  11011000  11011000  11011110  
+
+---- ERROR INDUCTION ----
+Select Error Type:
+0. No Error
+1. Single-Bit Error
+2. Multi-Bit / Burst Error
+Enter choice: 0
+
+---- RECEIVER'S SIDE ----
+Received Codewords       : 11010001  11001010  11011000  11011000  11011110  
+
+---- TRANSMISSION RESULT ----
+Result         : NO ERROR DETECTED.
+Extracted Data : hello
+
+[24bcs033@mepcolinux EX2]$ ./PAR
+==================================================
+   1D PARITY STRING TRANSMISSION SYSTEM (8-BIT)   
+==================================================
+
+Enter input string: world
+Choose Parity (1. Even Parity / 2. Odd Parity): 1
+
+---- SENDER'S SIDE ----
+Input Data String        : world
+7-Bit Raw Binary Data    : 1110111  1101111  1110010  1101100  1100100  
+Transmitted Codewords    : 11101110  11011110  11100100  11011000  11001001  
+
+---- ERROR INDUCTION ----
+Select Error Type:
+0. No Error
+1. Single-Bit Error
+2. Multi-Bit / Burst Error
+Enter choice: 1
+Enter Block Number (1 to 5): 2
+Enter Bit Position to Flip (0 to 7): 4
+  -> Flipped Bit 4 in Block 2.
+
+---- RECEIVER'S SIDE ----
+Received Codewords       : 11101110  11010110  11100100  11011000  11001001  
+
+---- TRANSMISSION RESULT ----
+Result         : ERROR DETECTED! Stream discarded due to parity violation.
+
+[24bcs033@mepcolinux EX2]$ ./PAR
+==================================================
+   1D PARITY STRING TRANSMISSION SYSTEM (8-BIT)   
+==================================================
+
+Enter input string: OK
+Choose Parity (1. Even Parity / 2. Odd Parity): 1
+
+---- SENDER'S SIDE ----
+Input Data String        : OK
+7-Bit Raw Binary Data    : 1001111  1001011  
+Transmitted Codewords    : 10011111  10010110  
+
+---- ERROR INDUCTION ----
+Select Error Type:
+0. No Error
+1. Single-Bit Error
+2. Multi-Bit / Burst Error
+Enter choice: 2
+How many bits to flip?: 4
+[Flip 1] Enter Block Number (1-2) & Bit Position (0-7): 1 2
+  -> Flipped Bit 2 in Block 1.
+[Flip 2] Enter Block Number (1-2) & Bit Position (0-7): 2 3
+  -> Flipped Bit 3 in Block 2.
+[Flip 3] Enter Block Number (1-2) & Bit Position (0-7): 1 6
+  -> Flipped Bit 6 in Block 1.
+[Flip 4] Enter Block Number (1-2) & Bit Position (0-7): 2 7
+  -> Flipped Bit 7 in Block 2.
+
+---- RECEIVER'S SIDE ----
+Received Codewords       : 10111101  10000111  
+
+---- TRANSMISSION RESULT ----
+Result         : NO ERROR DETECTED.
+Extracted Data : ^C
+
+[24bcs033@mepcolinux EX2]$ ./PAR
+==================================================
+   1D PARITY STRING TRANSMISSION SYSTEM (8-BIT)   
+==================================================
+
+Enter input string: JK
+Choose Parity (1. Even Parity / 2. Odd Parity): 2
+
+---- SENDER'S SIDE ----
+Input Data String        : JK
+7-Bit Raw Binary Data    : 1001010  1001011  
+Transmitted Codewords    : 10010100  10010111  
+
+---- ERROR INDUCTION ----
+Select Error Type:
+0. No Error
+1. Single-Bit Error
+2. Multi-Bit / Burst Error
+Enter choice: 2
+How many bits to flip?: 3
+[Flip 1] Enter Block Number (1-2) & Bit Position (0-7): 1 5
+  -> Flipped Bit 5 in Block 1.
+[Flip 2] Enter Block Number (1-2) & Bit Position (0-7): 1 7
+  -> Flipped Bit 7 in Block 1.
+[Flip 3] Enter Block Number (1-2) & Bit Position (0-7): 2 5
+  -> Flipped Bit 5 in Block 2.
+
+---- RECEIVER'S SIDE ----
+Received Codewords       : 10010001  10010011  
+
+---- TRANSMISSION RESULT ----
+Result         : NO ERROR DETECTED.
+Extracted Data : HI
+
+[24bcs035@mepcolinux EX2]$ cat CRC.c 
+#include <stdio.h>
+#include <string.h>
+
+int main() {
+    char inputString[100];
+    char rawGenInput[100];
+    char gen[64] = "";
+    char rawBinaryData[1000] = "";
+    char paddedData[1000] = "";
+    char remainder[64] = "";
+    char transmittedCodeword[1000] = "";
+    char receivedCodeword[1000] = "";
+
+    printf("==================================================\n");
+    printf("      CYCLIC REDUNDANCY CHECK (CRC) SYSTEM        \n");
+    printf("==================================================\n");
+
+    printf("\nEnter input data string (e.g., Hello, b, 5): ");
+    fgets(inputString, sizeof(inputString), stdin);
+    inputString[strcspn(inputString, "\n")] = '\0';
+
+    printf("Enter CRC Generator (Binary '11011' or Expression 'x^4 + x^3 + x + 1'): ");
+    fgets(rawGenInput, sizeof(rawGenInput), stdin);
+    rawGenInput[strcspn(rawGenInput, "\n")] = '\0';
+
+    /* ================= 1. PARSE GENERATOR INPUT ================= */
+    int isBinary = 1;
+    for (int i = 0; rawGenInput[i] != '\0'; i++) {
+        if (rawGenInput[i] != '0' && rawGenInput[i] != '1' && rawGenInput[i] != ' ') {
+            isBinary = 0;
+            break;
+        }
+    }
+
+    if (isBinary) {
+        int idx = 0;
+        for (int i = 0; rawGenInput[i] != '\0'; i++) {
+            if (rawGenInput[i] == '0' || rawGenInput[i] == '1') {
+                gen[idx++] = rawGenInput[i];
+            }
+        }
+        gen[idx] = '\0';
+    } else {
+        // Simple manual parser for polynomial expressions
+        int degrees[32] = {0};
+        int maxDegree = 0;
+
+        for (int i = 0; rawGenInput[i] != '\0'; i++) {
+            if (rawGenInput[i] == 'x') {
+                if (rawGenInput[i + 1] == '^') {
+                    int deg = rawGenInput[i + 2] - '0';
+                    degrees[deg] = 1;
+                    if (deg > maxDegree) maxDegree = deg;
+                } else {
+                    degrees[1] = 1;
+                    if (1 > maxDegree) maxDegree = 1;
+                }
+            } else if (rawGenInput[i] == '1' && (i == 0 || rawGenInput[i - 1] != '^')) {
+                degrees[0] = 1;
+            }
+        }
+
+        int idx = 0;
+        for (int i = maxDegree; i >= 0; i--) {
+            gen[idx++] = degrees[i] ? '1' : '0';
+        }
+        gen[idx] = '\0';
+    }
+
+    int genLen = strlen(gen);
+    int degree = genLen - 1;
+
+    /* ================= 2. GENERATOR VALIDATION ================= */
+    printf("\n---- GENERATOR PARSING & VALIDATION ----\n");
+    printf("Parsed Binary Generator   : %s  (Degree = %d)\n", gen, degree);
+
+    int r1_start = (gen[0] == '1');
+    int r1_end = (gen[genLen - 1] == '1');
+
+    int onesCount = 0;
+    for (int i = 0; i < genLen; i++) {
+        if (gen[i] == '1') onesCount++;
+    }
+    int r2_even = (onesCount % 2 == 0);
+
+    if (r1_start && r1_end) {
+        printf(" [PASS] Rule 1: Starts and ends with '1'.\n");
+    } else {
+        if (!r1_start) printf(" [FAIL] Rule 1: Must start with '1'.\n");
+        if (!r1_end)   printf(" [FAIL] Rule 1: Must end with '1' (x^0 coefficient must be 1).\n");
+    }
+
+    if (r2_even) {
+        printf(" [PASS] Rule 2: Contains an even count of '1's (%d ones -> x+1 factor present).\n", onesCount);
+    } else {
+        printf(" [FAIL] Rule 2: Must have an even count of '1's (factor of x+1).\n");
+    }
+
+    if (!r1_start || !r1_end || !r2_even) {
+        printf("\nRESULT: INVALID GENERATOR! Generator does not satisfy CRC rules.\n");
+        return 0; // Stop execution if generator fails validation
+    }
+    printf("\nRESULT: GENERATOR VALIDATED SUCCESSFULLY!\n");
+
+    /* ================= 3. SENDER SIDE ================= */
+    printf("\n---- SENDER'S SIDE ----\n");
+    printf("Input Data String         : %s\n", inputString);
+
+    // Convert string to 7-bit binary representation
+    int strLen = strlen(inputString);
+    int rawIdx = 0;
+    for (int i = 0; i < strLen; i++) {
+        int temp = (int)inputString[i] & 0x7F;
+        for (int j = 6; j >= 0; j--) {
+            rawBinaryData[rawIdx + j] = (temp % 2) + '0';
+            temp /= 2;
+        }
+        rawIdx += 7;
+    }
+    rawBinaryData[rawIdx] = '\0';
+    printf("7-Bit Raw Binary Data     : %s\n", rawBinaryData);
+
+    // Pad data with 'degree' zeros
+    strcpy(paddedData, rawBinaryData);
+    for (int i = 0; i < degree; i++) {
+        strcat(paddedData, "0");
+    }
+    printf("Padded Data Stream        : %s  (%d zeros padded)\n", paddedData, degree);
+
+    // Modulo-2 Division on Sender Side
+    char tempDiv[1000];
+    strcpy(tempDiv, paddedData);
+    int paddedLen = strlen(paddedData);
+
+    for (int i = 0; i <= paddedLen - genLen; i++) {
+        if (tempDiv[i] == '1') {
+            for (int j = 0; j < genLen; j++) {
+                tempDiv[i + j] = (tempDiv[i + j] == gen[j]) ? '0' : '1';
+            }
+        }
+    }
+
+    // Extract CRC Remainder
+    for (int i = 0; i < degree; i++) {
+        remainder[i] = tempDiv[paddedLen - degree + i];
+    }
+    remainder[degree] = '\0';
+    printf("Calculated CRC Remainder  : %s\n", remainder);
+
+    // Form Transmitted Codeword
+    strcpy(transmittedCodeword, rawBinaryData);
+    strcat(transmittedCodeword, remainder);
+    printf("Transmitted Codeword      : %s\n", transmittedCodeword);
+
+    /* ================= 4. ERROR INDUCTION ================= */
+    strcpy(receivedCodeword, transmittedCodeword);
+    int totalCodewordLen = strlen(receivedCodeword);
+
+    printf("\n---- ERROR INDUCTION ----\n");
+    printf("Select Error Type:\n");
+    printf("0. No Error\n");
+    printf("1. Single-Bit Error\n");
+    printf("2. Multi-Bit / Burst Error\n");
+    printf("Enter choice: ");
+
+    int errorType;
+    scanf("%d", &errorType);
+
+    if (errorType == 1) {
+        int bitPos;
+        printf("Enter bit position to flip (0 to %d): ", totalCodewordLen - 1);
+        scanf("%d", &bitPos);
+
+        if (bitPos >= 0 && bitPos < totalCodewordLen) {
+            receivedCodeword[bitPos] = (receivedCodeword[bitPos] == '0') ? '1' : '0';
+            printf("  -> Flipped Bit %d.\n", bitPos);
+        }
+    } 
+    else if (errorType == 2) {
+        int totalFlips;
+        printf("How many bits to flip?: ");
+        scanf("%d", &totalFlips);
+
+        for (int flip = 1; flip <= totalFlips; flip++) {
+            int bitPos;
+            printf("[Flip %d] Enter bit position to flip (0 to %d): ", flip, totalCodewordLen - 1);
+            scanf("%d", &bitPos);
+
+            if (bitPos >= 0 && bitPos < totalCodewordLen) {
+                receivedCodeword[bitPos] = (receivedCodeword[bitPos] == '0') ? '1' : '0';
+                printf("  -> Flipped Bit %d.\n", bitPos);
+            }
+        }
+    }
+
+    /* ================= 5. RECEIVER SIDE ================= */
+    printf("\n---- RECEIVER'S SIDE ----\n");
+    printf("Received Codeword         : %s\n", receivedCodeword);
+
+    // Modulo-2 Division on Receiver Side
+    strcpy(tempDiv, receivedCodeword);
+    for (int i = 0; i <= totalCodewordLen - genLen; i++) {
+        if (tempDiv[i] == '1') {
+            for (int j = 0; j < genLen; j++) {
+                tempDiv[i + j] = (tempDiv[i + j] == gen[j]) ? '0' : '1';
+            }
+        }
+    }
+
+    char recRemainder[64];
+    for (int i = 0; i < degree; i++) {
+        recRemainder[i] = tempDiv[totalCodewordLen - degree + i];
+    }
+    recRemainder[degree] = '\0';
+
+    printf("Calculated Remainder      : %s", recRemainder);
+
+    int hasError = 0;
+    for (int i = 0; i < degree; i++) {
+        if (recRemainder[i] != '0') {
+            hasError = 1;
+            break;
+        }
+    }
+
+    if (hasError) {
+        printf("  (Non-Zero!)\n");
+    } else {
+        printf("  (Zero!)\n");
+    }
+
+    /* ================= 6. TRANSMISSION RESULT ================= */
+    printf("\n---- TRANSMISSION RESULT ----\n");
+    if (hasError) {
+        printf("Result                    : ERROR DETECTED! Remainder != 0. Frame discarded.\n");
+    } else {
+        printf("Result                    : NO ERROR DETECTED.\n");
+
+        // Reconstruct original text from received bits
+        char extractedString[100] = "";
+        int rawLen = strlen(rawBinaryData);
+
+        for (int i = 0; i < rawLen; i += 7) {
+            int asciiVal = 0;
+            for (int j = 0; j < 7; j++) {
+                asciiVal = (asciiVal * 2) + (receivedCodeword[i + j] - '0');
+            }
+            extractedString[i / 7] = (char)asciiVal;
+        }
+        extractedString[rawLen / 7] = '\0';
+
+        printf("Extracted Data            : %s\n", extractedString);
+    }
+
+    return 0;
+}
+
+[24bcs033@mepcolinux EX2]$ ./crc 
+==================================================
+      CYCLIC REDUNDANCY CHECK (CRC) SYSTEM        
+==================================================
+
+Enter input data string (e.g., Hello, b, 5): P
+Enter CRC Generator (Binary '11011' or Expression 'x^4 + x^3 + x + 1'): 1001
+
+---- GENERATOR PARSING & VALIDATION ----
+Parsed Binary Generator   : 1001  (Degree = 3)
+ [PASS] Rule 1: Starts and ends with '1'.
+ [PASS] Rule 2: Contains an even count of '1's (2 ones -> x+1 factor present).
+
+RESULT: GENERATOR VALIDATED SUCCESSFULLY!
+
+---- SENDER'S SIDE ----
+Input Data String         : P
+7-Bit Raw Binary Data     : 1010000
+Padded Data Stream        : 1010000000  (3 zeros padded)
+Calculated CRC Remainder  : 011
+Transmitted Codeword      : 1010000011
+
+---- ERROR INDUCTION ----
+Select Error Type:
+0. No Error
+1. Single-Bit Error
+2. Multi-Bit / Burst Error
+Enter choice: 0
+
+---- RECEIVER'S SIDE ----
+Received Codeword         : 1010000011
+Calculated Remainder      : 000  (Zero!)
+
+---- TRANSMISSION RESULT ----
+Result                    : NO ERROR DETECTED.
+Extracted Data            : P
+
+[24bcs033@mepcolinux EX2]$ ./crc 
+==================================================
+      CYCLIC REDUNDANCY CHECK (CRC) SYSTEM        
+==================================================
+
+Enter input data string (e.g., Hello, b, 5): P
+Enter CRC Generator (Binary '11011' or Expression 'x^4 + x^3 + x + 1'): x^3+1          
+
+---- GENERATOR PARSING & VALIDATION ----
+Parsed Binary Generator   : 1001  (Degree = 3)
+ [PASS] Rule 1: Starts and ends with '1'.
+ [PASS] Rule 2: Contains an even count of '1's (2 ones -> x+1 factor present).
+
+RESULT: GENERATOR VALIDATED SUCCESSFULLY!
+
+---- SENDER'S SIDE ----
+Input Data String         : P
+7-Bit Raw Binary Data     : 1010000
+Padded Data Stream        : 1010000000  (3 zeros padded)
+Calculated CRC Remainder  : 011
+Transmitted Codeword      : 1010000011
+
+---- ERROR INDUCTION ----
+Select Error Type:
+0. No Error
+1. Single-Bit Error
+2. Multi-Bit / Burst Error
+Enter choice: 1
+Enter bit position to flip (0 to 9): 7
+  -> Flipped Bit 7.
+
+---- RECEIVER'S SIDE ----
+Received Codeword         : 1010000111
+Calculated Remainder      : 100  (Non-Zero!)
+
+---- TRANSMISSION RESULT ----
+Result                    : ERROR DETECTED! Remainder != 0. Frame discarded.
+
+[24bcs033@mepcolinux EX2]$ ./crc 
+==================================================
+      CYCLIC REDUNDANCY CHECK (CRC) SYSTEM        
+==================================================
+
+Enter input data string (e.g., Hello, b, 5): H
+Enter CRC Generator (Binary '11011' or Expression 'x^4 + x^3 + x + 1'): 1101
+
+---- GENERATOR PARSING & VALIDATION ----
+Parsed Binary Generator   : 1101  (Degree = 3)
+ [PASS] Rule 1: Starts and ends with '1'.
+ [FAIL] Rule 2: Must have an even count of '1's (factor of x+1).
+
+RESULT: INVALID GENERATOR! Generator does not satisfy CRC rules.
+
+[24bcs033@mepcolinux EX2]$ ./crc 
+==================================================
+      CYCLIC REDUNDANCY CHECK (CRC) SYSTEM        
+==================================================
+
+Enter input data string (e.g., Hello, b, 5): 5
+Enter CRC Generator (Binary '11011' or Expression 'x^4 + x^3 + x + 1'): 11011
+
+---- GENERATOR PARSING & VALIDATION ----
+Parsed Binary Generator   : 11011  (Degree = 4)
+ [PASS] Rule 1: Starts and ends with '1'.
+ [PASS] Rule 2: Contains an even count of '1's (4 ones -> x+1 factor present).
+
+RESULT: GENERATOR VALIDATED SUCCESSFULLY!
+
+---- SENDER'S SIDE ----
+Input Data String         : 5
+7-Bit Raw Binary Data     : 0110101
+Padded Data Stream        : 01101010000  (4 zeros padded)
+Calculated CRC Remainder  : 0110
+Transmitted Codeword      : 01101010110
+
+---- ERROR INDUCTION ----
+Select Error Type:
+0. No Error
+1. Single-Bit Error
+2. Multi-Bit / Burst Error
+Enter choice: 2
+How many bits to flip?: 2
+[Flip 1] Enter bit position to flip (0 to 10): 1
+  -> Flipped Bit 1.
+[Flip 2] Enter bit position to flip (0 to 10): 4
+  -> Flipped Bit 4.
+
+---- RECEIVER'S SIDE ----
+Received Codeword         : 00100010110
+Calculated Remainder      : 1001  (Non-Zero!)
+
+---- TRANSMISSION RESULT ----
+Result                    : ERROR DETECTED! Remainder != 0. Frame discarded.
+
+[24bcs033@mepcolinux EX2]$ cat chkSum.c 
+#include <stdio.h>
+#include <string.h>
+
+#define MAX_LEN 200
+
+// Helper function to calculate 1's complement sum without bitwise shift operations
+int calculate_ones_sum(int arr[], int size) {
+    int sum = 0;
+    for (int i = 0; i < size; i++) {
+        sum += arr[i];
+    }
+    // Handle 8-bit wrap-around carry
+    while (sum > 255) {
+        sum = (sum % 256) + (sum / 256);
+    }
+    return sum;
+}
+
+// Helper function to print integer as an 8-bit binary string
+void print_binary(int val) {
+    char bits[9];
+    int temp = val;
+    for (int j = 7; j >= 0; j--) {
+        bits[j] = (temp % 2) + '0';
+        temp /= 2;
+    }
+    bits[8] = '\0';
+    printf("%s", bits);
+}
+
+int main() {
+    char data[MAX_LEN];
+    int ascii_blocks[MAX_LEN];
+    int received_blocks[MAX_LEN];
+    int length, i;
+    int error_choice;
+
+    printf("Enter data string (e.g., Hi): ");
+    fgets(data, sizeof(data), stdin);
+    data[strcspn(data, "\n")] = '\0';
+
+    length = strlen(data);
+    if (length == 0) {
+        printf("Empty string entered.\n");
+        return 1;
+    }
+
+    // Convert string characters to ASCII integer values
+    for (i = 0; i < length; i++) {
+        ascii_blocks[i] = (int)data[i];
+    }
+
+    /* ================= SENDER'S SIDE ================= */
+    printf("\n----SENDER'S SIDE----\n");
+    printf("Original Data blocks in Binary:\n");
+    for (i = 0; i < length; i++) {
+        printf("Block %d ('%c'): ", i + 1, data[i]);
+        print_binary(ascii_blocks[i]);
+        printf("\n");
+    }
+
+    // 1's complement sum calculation
+    int sum = calculate_ones_sum(ascii_blocks, length);
+    int sender_checksum = 255 - sum; // 1's complement
+
+    printf("\nOriginal Sender Checksum (Sum): ");
+    print_binary(sum);
+    printf("\nComplemented Sender Checksum   : ");
+    print_binary(sender_checksum);
+    printf("\n");
+
+    // Transmit data blocks + complemented checksum block
+    ascii_blocks[length] = sender_checksum;
+    int total_blocks = length + 1;
+
+    printf("\n>>> FINAL DATA TO BE TRANSMITTED (Data + Complemented Checksum) <<<\n");
+    for (i = 0; i < total_blocks; i++) {
+        print_binary(ascii_blocks[i]);
+        if (i == length - 1) {
+            printf("| ");
+        } else {
+            printf(" ");
+        }
+    }
+    printf("\n");
+
+    /* ================= RECEIVER'S SIDE ================= */
+    printf("\n----RECEIVER'S SIDE----\n");
+    for (i = 0; i < total_blocks; i++) {
+        received_blocks[i] = ascii_blocks[i];
+    }
+
+    printf("Induce Error Type:\n");
+    printf("0. No Error\n");
+    printf("1. 1-Bit Error\n");
+    printf("2. 2-Bit Error\n");
+    printf("Enter choice (0-2): ");
+    scanf("%d", &error_choice);
+
+    if (error_choice == 1) {
+        int block_num, bit_pos;
+        printf("Enter block number to manipulate (1 to %d): ", total_blocks);
+        scanf("%d", &block_num);
+        printf("Enter bit position to flip (0 to 7): ");
+        scanf("%d", &bit_pos);
+
+        if (block_num >= 1 && block_num <= total_blocks && bit_pos >= 0 && bit_pos <= 7) {
+            int power = 1;
+            for (int p = 0; p < bit_pos; p++) power *= 2;
+
+            int bit_val = (received_blocks[block_num - 1] / power) % 2;
+            if (bit_val == 1) {
+                received_blocks[block_num - 1] -= power;
+            } else {
+                received_blocks[block_num - 1] += power;
+            }
+
+            printf("\n[ALERT] 1-Bit error induced in Block %d at Bit %d!\n", block_num, bit_pos);
+        }
+    } 
+    else if (error_choice == 2) {
+        int block_num, bit_pos1, bit_pos2;
+        printf("Enter block number to manipulate (1 to %d): ", total_blocks);
+        scanf("%d", &block_num);
+        printf("Enter first bit position to flip (0 to 7): ");
+        scanf("%d", &bit_pos1);
+        printf("Enter second bit position to flip (0 to 7): ");
+        scanf("%d", &bit_pos2);
+
+        if (block_num >= 1 && block_num <= total_blocks) {
+            int p1 = 1, p2 = 1;
+            for (int p = 0; p < bit_pos1; p++) p1 *= 2;
+            for (int p = 0; p < bit_pos2; p++) p2 *= 2;
+
+            int bit_val1 = (received_blocks[block_num - 1] / p1) % 2;
+            if (bit_val1 == 1) received_blocks[block_num - 1] -= p1;
+            else received_blocks[block_num - 1] += p1;
+
+            int bit_val2 = (received_blocks[block_num - 1] / p2) % 2;
+            if (bit_val2 == 1) received_blocks[block_num - 1] -= p2;
+            else received_blocks[block_num - 1] += p2;
+
+            printf("\n[ALERT] 2-Bit error induced in Block %d at Bits %d and %d!\n", block_num, bit_pos1, bit_pos2);
+        }
+    } else {
+        printf("\n[INFO] No error induced.\n");
+    }
+
+    printf("\nReceived Packet Blocks:\n");
+    for (i = 0; i < total_blocks; i++) {
+        printf("Block %d: ", i + 1);
+        print_binary(received_blocks[i]);
+        if (i == total_blocks - 1) {
+            printf(" (Received Checksum Block)");
+        }
+        printf("\n");
+    }
+
+    // Receiver adds all blocks together (Data + Checksum block)
+    int rec_sum = calculate_ones_sum(received_blocks, total_blocks);
+    int rec_complement = 255 - rec_sum;
+
+    printf("\nReceiver calculations (Summing all blocks):\n");
+    printf("Receiver Sum                : ");
+    print_binary(rec_sum);
+    printf("\nReceiver Checksum (Original): ");
+    print_binary(rec_sum);
+    printf("\nReceiver Complement         : ");
+    print_binary(rec_complement);
+    printf("\n");
+
+    /* ================= FINAL RESULT & EXTRACTION ================= */
+    if (rec_complement == 0) {
+        printf("\n>>> RESULT: SUCCESS! Complemented sum is all 0s. No error detected. <<<\n");
+
+        // Data Extraction Process
+        char extracted_string[MAX_LEN];
+        printf("Extracted Original Data Bits  : ");
+        for (i = 0; i < length; i++) {
+            print_binary(received_blocks[i]);
+            printf(" ");
+            extracted_string[i] = (char)received_blocks[i];
+        }
+        extracted_string[length] = '\0';
+
+        printf("\nExtracted Original Data String: %s\n", extracted_string);
+    } else {
+        printf("\n>>> RESULT: ERROR DETECTED! Complemented sum is not all 0s. Data corrupted. <<<\n");
+    }
+
+    return 0;
+}
+
+[24bcs033@mepcolinux EX2]$ ./check 
+Enter data string (e.g., Hi): M"M
+
+----SENDER'S SIDE----
+Original Data blocks in Binary:
+Block 1 ('M'): 01001101
+Block 2 ('"'): 00100010
+Block 3 ('M'): 01001101
+
+Original Sender Checksum (Sum): 10111100
+Complemented Sender Checksum   : 01000011
+
+>>> FINAL DATA TO BE TRANSMITTED (Data + Complemented Checksum) <<<
+01001101 00100010 01001101| 01000011 
+
+----RECEIVER'S SIDE----
+Induce Error Type:
+0. No Error
+1. 1-Bit Error
+2. 2-Bit Error
+Enter choice (0-2): 0
+
+[INFO] No error induced.
+
+Received Packet Blocks:
+Block 1: 01001101
+Block 2: 00100010
+Block 3: 01001101
+Block 4: 01000011 (Received Checksum Block)
+
+Receiver calculations (Summing all blocks):
+Receiver Sum                : 11111111
+Receiver Checksum (Original): 11111111
+Receiver Complement         : 00000000
+
+>>> RESULT: SUCCESS! Complemented sum is all 0s. No error detected. <<<
+Extracted Original Data Bits  : 01001101 00100010 01001101 
+Extracted Original Data String: M"M
+
+[24bcs035@mepcolinux EX2]$ ./check 
+Enter data string (e.g., Hi): M"M
+
+----SENDER'S SIDE----
+Original Data blocks in Binary:
+Block 1 ('M'): 01001101
+Block 2 ('"'): 00100010
+Block 3 ('M'): 01001101
+
+Original Sender Checksum (Sum): 10111100
+Complemented Sender Checksum   : 01000011
+
+>>> FINAL DATA TO BE TRANSMITTED (Data + Complemented Checksum) <<<
+01001101 00100010 01001101| 01000011 
+
+----RECEIVER'S SIDE----
+Induce Error Type:
+0. No Error
+1. 1-Bit Error
+2. 2-Bit Error
+Enter choice (0-2): 1
+Enter block number to manipulate (1 to 4): 2
+Enter bit position to flip (0 to 7): 4
+
+[ALERT] 1-Bit error induced in Block 2 at Bit 4!
+
+Received Packet Blocks:
+Block 1: 01001101
+Block 2: 00110010
+Block 3: 01001101
+Block 4: 01000011 (Received Checksum Block)
+
+Receiver calculations (Summing all blocks):
+Receiver Sum                : 00010000
+Receiver Checksum (Original): 00010000
+Receiver Complement         : 11101111
+
+>>> RESULT: ERROR DETECTED! Complemented sum is not all 0s. Data corrupted. <<<
+
+[24bcs033@mepcolinux EX2]$ ./check 
+Enter data string (e.g., Hi): Hi
+
+----SENDER'S SIDE----
+Original Data blocks in Binary:
+Block 1 ('H'): 01001000
+Block 2 ('i'): 01101001
+
+Original Sender Checksum (Sum): 10110001
+Complemented Sender Checksum   : 01001110
+
+>>> FINAL DATA TO BE TRANSMITTED (Data + Complemented Checksum) <<<
+01001000 01101001| 01001110 
+
+----RECEIVER'S SIDE----
+Induce Error Type:
+0. No Error
+1. 1-Bit Error
+2. 2-Bit Error
+Enter choice (0-2): 2
+Enter block number to manipulate (1 to 3): 3 
+Enter first bit position to flip (0 to 7): 2
+Enter second bit position to flip (0 to 7): 6
+
+[ALERT] 2-Bit error induced in Block 3 at Bits 2 and 6!
+
+Received Packet Blocks:
+Block 1: 01001000
+Block 2: 01101001
+Block 3: 00001010 (Received Checksum Block)
+
+Receiver calculations (Summing all blocks):
+Receiver Sum                : 10111011
+Receiver Checksum (Original): 10111011
+Receiver Complement         : 01000100
+
+>>> RESULT: ERROR DETECTED! Complemented sum is not all 0s. Data corrupted. <<<.
