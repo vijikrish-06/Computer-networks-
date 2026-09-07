@@ -1,0 +1,157 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+#include <stdbool.h>
+
+#define INF 1e9
+
+// Structure to represent a cell in the Min-Heap
+typedef struct {
+    int row;
+    int col;
+    int effort;
+} HeapNode;
+
+// Structure for the Min-Heap
+typedef struct {
+    HeapNode* data;
+    int size;
+    int capacity;
+} MinHeap;
+
+// Min-Heap Functions
+MinHeap* createMinHeap(int capacity) {
+    MinHeap* heap = (MinHeap*)malloc(sizeof(MinHeap));
+    heap->data = (HeapNode*)malloc(capacity * sizeof(HeapNode));
+    heap->size = 0;
+    heap->capacity = capacity;
+    return heap;
+}
+
+void swap(HeapNode* a, HeapNode* b) {
+    HeapNode temp = *a;
+    *a = *b;
+    *b = temp;
+}
+
+void minHeapify(MinHeap* heap, int idx) {
+    int smallest = idx;
+    int left = 2 * idx + 1;
+    int right = 2 * idx + 2;
+
+    if (left < heap->size && heap->data[left].effort < heap->data[smallest].effort)
+        smallest = left;
+    if (right < heap->size && heap->data[right].effort < heap->data[smallest].effort)
+        smallest = right;
+
+    if (smallest != idx) {
+        swap(&heap->data[idx], &heap->data[smallest]);
+        minHeapify(heap, smallest);
+    }
+}
+
+void insertHeap(MinHeap* heap, HeapNode node) {
+    if (heap->size == heap->capacity) return;
+    
+    int idx = heap->size++;
+    heap->data[idx] = node;
+
+    while (idx > 0 && heap->data[(idx - 1) / 2].effort > heap->data[idx].effort) {
+        swap(&heap->data[(idx - 1) / 2], &heap->data[idx]);
+        idx = (idx - 1) / 2;
+    }
+}
+
+HeapNode extractMin(MinHeap* heap) {
+    HeapNode root = heap->data[0];
+    heap->data[0] = heap->data[--heap->size];
+    minHeapify(heap, 0);
+    return root;
+}
+
+// Helper utility to calculate the maximum value between two integers
+int max(int a, int b) {
+    return (a > b) ? a : b;
+}
+
+int minimumEffortPath(int** heights, int heightsSize, int* heightsColSize) {
+    int rows = heightsSize;
+    int cols = heightsColSize[0];
+
+    // Allocate 2D array tracking the minimum effort matrix
+    int** effort = (int**)malloc(rows * sizeof(int*));
+    for (int i = 0; i < rows; i++) {
+        effort[i] = (int*)malloc(cols * sizeof(int));
+        for (int j = 0; j < cols; j++) {
+            effort[i][j] = INF;
+        }
+    }
+
+    // Min-Heap instantiation
+    MinHeap* heap = createMinHeap(rows * cols);
+
+    // Initialize source coordinate cell (0, 0)
+    effort[0][0] = 0;
+    HeapNode start = {0, 0, 0};
+    insertHeap(heap, start);
+
+    // Direction arrays for traveling Up, Down, Left, Right
+    int dr[] = {-1, 1, 0, 0};
+    int dc[] = {0, 0, -1, 1};
+
+    while (heap->size > 0) {
+        HeapNode curr = extractMin(heap);
+        int r = curr.row;
+        int c = curr.col;
+        int currEffort = curr.effort;
+
+        // Target cell reached! Since it is a Min-Heap, this is guaranteed to be optimal.
+        if (r == rows - 1 && c == cols - 1) {
+            int result = currEffort;
+            
+            // Clean up dynamically allocated memories
+            for (int i = 0; i < rows; i++) free(effort[i]);
+            free(effort);
+            free(heap->data);
+            free(heap);
+            
+            return result;
+        }
+
+        // If a lower effort path has already been identified for this position, skip it
+        if (currEffort > effort[r][c]) continue;
+
+        // Traverse all 4 coordinate neighbors
+        for (int i = 0; i < 4; i++) {
+            int newR = r + dr[i];
+            int newC = c + dc[i];
+
+            if (newR >= 0 && newR < rows && newC >= 0 && newC < cols) {
+                // Calculate the max absolute difficulty bottleneck value along this choice route
+                int edgeWeight = abs(heights[r][c] - heights[newR][newC]);
+                int nextEffort = max(effort[r][c], edgeWeight);
+
+                // Relax the edge if it yields a smaller path effort bottleneck
+                if (nextEffort < effort[newR][newC]) {
+                    effort[newR][newC] = nextEffort;
+                    HeapNode nextNode = {newR, newC, nextEffort};
+                    insertHeap(heap, nextNode);
+                }
+            }
+        }
+    }
+
+    return 0;
+}
+Accepted
+Runtime: 0 ms
+Case 1
+Case 2
+Case 3
+Input
+heights =
+[[1,2,2],[3,8,2],[5,3,5]]
+Output
+2
+Expected
+2
