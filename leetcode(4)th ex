@@ -1,0 +1,301 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdbool.h>
+
+#define MAX_STOPS 1000000
+
+// Structure to hold a dynamic array of bus IDs for each stop
+typedef struct {
+    int *buses;
+    int size;
+    int capacity;
+} BusList;
+
+int numBusesToDestination(int** routes, int routesSize, int* routesColSize, int source, int target) {
+    // If source and target are the same, 0 buses are needed
+    if (source == target) return 0;
+
+    // Allocate memory for stop-to-bus mapping dynamically to avoid massive stack sizes
+    BusList* stopToBuses = (BusList*)calloc(MAX_STOPS, sizeof(BusList));
+
+    // Populate the stop-to-bus mapping
+    for (int busId = 0; busId < routesSize; busId++) {
+        for (int j = 0; j < routesColSize[busId]; j++) {
+            int stop = routes[busId][j];
+            
+            if (stopToBuses[stop].size == stopToBuses[stop].capacity) {
+                stopToBuses[stop].capacity = stopToBuses[stop].capacity == 0 ? 4 : stopToBuses[stop].capacity * 2;
+                stopToBuses[stop].buses = (int*)realloc(stopToBuses[stop].buses, stopToBuses[stop].capacity * sizeof(int));
+            }
+            stopToBuses[stop].buses[stopToBuses[stop].size++] = busId;
+        }
+    }
+
+    // BFS Queue Setup
+    // Maximum possible elements in the queue will not exceed total stops across all routes
+    int totalStopsCount = 0;
+    for (int i = 0; i < routesSize; i++) totalStopsCount += routesColSize[i];
+    
+    int* queue = (int*)malloc((totalStopsCount + 1) * sizeof(int));
+    int head = 0, tail = 0;
+
+    // Tracking arrays
+    bool* visitedStops = (bool*)calloc(MAX_STOPS, sizeof(bool));
+    bool* visitedBuses = (bool*)calloc(routesSize, sizeof(bool));
+
+    // Enqueue source
+    queue[tail++] = source;
+    visitedStops[source] = true;
+
+    int busCount = 0;
+
+    // Standard BFS Loop
+    while (head < tail) {
+        int levelSize = tail - head;
+        busCount++; // Increment bus boarding tier for this level
+
+        for (int i = 0; i < levelSize; i++) {
+            int currentStop = queue[head++];
+
+            // Explore all buses that pass through the current stop
+            int availableBusesCount = stopToBuses[currentStop].size;
+            for (int j = 0; j < availableBusesCount; j++) {
+                int busId = stopToBuses[currentStop].buses[j];
+
+                if (visitedBuses[busId]) continue;
+                visitedBuses[busId] = true;
+
+                // Explore all stops reachable by this bus route
+                for (int k = 0; k < routesColSize[busId]; k++) {
+                    int nextStop = routes[busId][k];
+
+                    if (visitedStops[nextStop]) continue;
+
+                    // Destination found!
+                    if (nextStop == target) {
+                        // Free all dynamically allocated memory before returning
+                        for (int m = 0; m < MAX_STOPS; m++) {
+                            if (stopToBuses[m].buses) free(stopToBuses[m].buses);
+                        }
+                        free(stopToBuses);
+                        free(queue);
+                        free(visitedStops);
+                        free(visitedBuses);
+                        return busCount;
+                    }
+
+                    visitedStops[nextStop] = true;
+                    queue[tail++] = nextStop;
+                }
+            }
+        }
+    }
+
+    // Free memory if target is unreachable
+    for (int m = 0; m < MAX_STOPS; m++) {
+        if (stopToBuses[m].buses) free(stopToBuses[m].buses);
+    }
+    free(stopToBuses);
+    free(queue);
+    free(visitedStops);
+    free(visitedBuses);
+
+    return -1; // Target unreachable
+}
+Accepted
+Runtime: 5 ms
+Case 1
+Case 2
+Input
+routes =
+[[1,2,7],[3,6,7]]
+source =
+1
+target =
+6
+Output
+2
+Expected
+2
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+
+// Node structure for the adjacency list
+typedef struct Edge {
+    int to;
+    int is_original; // 1 if direction is u -> v, 0 if v -> u
+    struct Edge* next;
+} Edge;
+
+// Helper function to insert an edge into the adjacency list
+void addEdge(Edge** adj, int from, int to, int is_original) {
+    Edge* e = (Edge*)malloc(sizeof(Edge));
+    e->to = to;
+    e->is_original = is_original;
+    e->next = adj[from];
+    adj[from] = e;
+}
+
+// Standard DFS traversal moving outwards from city 0
+void dfs(int node, int parent, Edge** adj, int* changeCount) {
+    Edge* e = adj[node];
+    while (e != NULL) {
+        if (e->to != parent) {
+            // If the road points away from the capital, it must be reversed
+            if (e->is_original == 1) {
+                (*changeCount)++;
+            }
+            dfs(e->to, node, adj, changeCount);
+        }
+        e = e->next;
+    }
+}
+
+int minReorder(int n, int** connections, int connectionsSize, int* connectionsColSize) {
+    // Allocate adjacency list dynamically
+    Edge** adj = (Edge**)calloc(n, sizeof(Edge*));
+    
+    // Build the bi-directional tree graph
+    for (int i = 0; i < connectionsSize; i++) {
+        int u = connections[i][0];
+        int v = connections[i][1];
+        
+        addEdge(adj, u, v, 1); // Original road orientation
+        addEdge(adj, v, u, 0); // Simulated reverse orientation
+    }
+    
+    int changeCount = 0;
+    
+    // Start DFS from the capital (node 0) with a dummy parent (-1)
+    dfs(0, -1, adj, &changeCount);
+    
+    // Clean up allocated memory
+    for (int i = 0; i < n; i++) {
+        Edge* e = adj[i];
+        while (e != NULL) {
+            Edge* tmp = e;
+            e = e->next;
+            free(tmp);
+        }
+    }
+    free(adj);
+    
+    return changeCount;
+}
+
+Accepted
+Runtime: 0 ms
+Case 1
+Case 2
+Case 3
+Input
+n =
+6
+connections =
+[[0,1],[1,3],[2,3],[4,0],[4,5]]
+Output
+3
+Expected
+3
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+
+#define INF 999999
+
+int networkDelayTime(int** times, int timesSize, int* timesColSize, int n, int k) {
+    // 1-indexed distance array initialization
+    int* dist = (int*)malloc((n + 1) * sizeof(int));
+    bool* visited = (bool*)calloc((n + 1), sizeof(bool));
+    
+    // Create and fill adjacency matrix with infinity
+    int** graph = (int**)malloc((n + 1) * sizeof(int*));
+    for (int i = 0; i <= n; i++) {
+        graph[i] = (int*)malloc((n + 1) * sizeof(int));
+        for (int j = 0; j <= n; j++) {
+            graph[i][j] = (i == j) ? 0 : INF;
+        }
+    }
+    
+    // Populate the adjacency matrix with actual times
+    for (int i = 0; i < timesSize; i++) {
+        int u = times[i][0];
+        int v = times[i][1];
+        int w = times[i][2];
+        graph[u][v] = w;
+    }
+    
+    // Initialize distance array from starting node k
+    for (int i = 1; i <= n; i++) {
+        dist[i] = graph[k][i];
+    }
+    dist[k] = 0;
+    visited[k] = true;
+    
+    // Dijkstra's main relaxation loop
+    for (int count = 1; count < n; count++) {
+        int u = -1;
+        int minDist = INF;
+        
+        // Step 1: Find the unvisited node with the smallest distance
+        for (int i = 1; i <= n; i++) {
+            if (!visited[i] && dist[i] < minDist) {
+                minDist = dist[i];
+                u = i;
+            }
+        }
+        
+        // If no more reachable nodes are found, break early
+        if (u == -1) break;
+        
+        visited[u] = true;
+        
+        // Step 2: Update (relax) neighbors of the selected node u
+        for (int v = 1; v <= n; v++) {
+            if (!visited[v] && graph[u][v] != INF && dist[u] + graph[u][v] < dist[v]) {
+                dist[v] = dist[u] + graph[u][v];
+            }
+        }
+    }
+    
+    // Step 3: Find the maximum time taken among all nodes
+    int maxTime = 0;
+    for (int i = 1; i <= n; i++) {
+        if (dist[i] == INF) {
+            // A node is completely unreachable, so all nodes cannot receive the signal
+            maxTime = -1;
+            break;
+        }
+        if (dist[i] > maxTime) {
+            maxTime = dist[i];
+        }
+    }
+    
+    // Free allocated memory
+    for (int i = 0; i <= n; i++) free(graph[i]);
+    free(graph);
+    free(dist);
+    free(visited);
+    
+    return maxTime;
+}
+Accepted
+Runtime: 3 ms
+Case 1
+Case 2
+Case 3
+Input
+times =
+[[2,1,1],[2,3,1],[3,4,1]]
+n =
+4
+k =
+2
+Output
+2
+Expected
+2
