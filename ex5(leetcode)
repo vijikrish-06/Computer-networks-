@@ -1,0 +1,249 @@
+#include <stdio.h>
+#include <stdlib.h>
+
+/**
+ * Note: The returned array must be malloced, assume caller calls free().
+ */
+int* maxSlidingWindow(int* nums, int numsSize, int k, int* returnSize) {
+    if (numsSize == 0 || k == 0) {
+        *returnSize = 0;
+        return NULL;
+    }
+
+    // The output array will contain exactly (numsSize - k + 1) elements
+    *returnSize = numsSize - k + 1;
+    int* result = (int*)malloc((*returnSize) * sizeof(int));
+    
+    // Allocate memory for the double-ended queue (deque) to store indices
+    int* deque = (int*)malloc(numsSize * sizeof(int));
+    int head = 0; // Front of the deque
+    int tail = 0; // Back of the deque
+
+    int resIdx = 0;
+
+    for (int i = 0; i < numsSize; i++) {
+        // 1. Remove indices that are out of the current sliding window boundary
+        if (head < tail && deque[head] < i - k + 1) {
+            head++;
+        }
+
+        // 2. Remove all elements from the back of the deque that are smaller 
+        //    than the current element nums[i] (maintain monotonic decreasing order)
+        while (head < tail && nums[deque[tail - 1]] <= nums[i]) {
+            tail--;
+        }
+
+        // 3. Insert the current element's index at the back of the deque
+        deque[tail++] = i;
+
+        // 4. Once the window reaches size k, the maximum element is at the front
+        if (i >= k - 1) {
+            result[resIdx++] = nums[deque[head]];
+        }
+    }
+
+    // Free the temporary deque buffer
+    free(deque);
+    
+    return result;
+}
+Accepted
+Runtime: 0 ms
+Case 1
+Case 2
+Input
+nums =
+[1,3,-1,-3,5,3,6,7]
+k =
+3
+Output
+[3,3,5,5,6,7]
+Expected
+[3,3,5,5,6,7]#include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+
+// Universal structure for heap entries tracking both the value and original index
+typedef struct {
+    long long val; // Use long long to prevent integer overflow with INT_MIN / INT_MAX boundaries
+    int idx;
+} HeapNode;
+
+typedef struct {
+    HeapNode* data;
+    int size;
+    int capacity;
+    bool is_min_heap;
+} Heap;
+
+// Instantiates a tracking heap
+Heap* createHeap(int capacity, bool is_min_heap) {
+    Heap* heap = (Heap*)malloc(sizeof(Heap));
+    heap->data = (HeapNode*)malloc(capacity * sizeof(HeapNode));
+    heap->size = 0;
+    heap->capacity = capacity;
+    heap->is_min_heap = is_min_heap;
+    return heap;
+}
+
+void swap(HeapNode* a, HeapNode* b) {
+    HeapNode temp = *a;
+    *a = *b;
+    *b = temp;
+}
+
+// Compare rules governing priority structures
+bool compare(HeapNode a, HeapNode b, bool is_min_heap) {
+    if (a.val == b.val) {
+        return a.idx < b.idx; // Secondary sort on original index for stability
+    }
+    return is_min_heap ? (a.val < b.val) : (a.val > b.val);
+}
+
+void heapifyUp(Heap* heap, int idx) {
+    while (idx > 0) {
+        int p = (idx - 1) / 2;
+        if (compare(heap->data[idx], heap->data[p], heap->is_min_heap)) {
+            swap(&heap->data[idx], &heap->data[p]);
+            idx = p;
+        } else {
+            break;
+        }
+    }
+}
+
+void heapifyDown(Heap* heap, int idx) {
+    int target = idx;
+    while (2 * idx + 1 < heap->size) {
+        int left = 2 * idx + 1;
+        int right = 2 * idx + 2;
+        
+        if (compare(heap->data[left], heap->data[target], heap->is_min_heap)) {
+            target = left;
+        }
+        if (right < heap->size && compare(heap->data[right], heap->data[target], heap->is_min_heap)) {
+            target = right;
+        }
+        
+        if (target != idx) {
+            swap(&heap->data[idx], &heap->data[target]);
+            idx = target;
+        } else {
+            break;
+        }
+    }
+}
+
+void push(Heap* heap, long long val, int idx) {
+    HeapNode node = {val, idx};
+    heap->data[heap->size] = node;
+    heapifyUp(heap, heap->size);
+    heap->size++;
+}
+
+void pop(Heap* heap) {
+    if (heap->size == 0) return;
+    heap->size--;
+    heap->data[0] = heap->data[heap->size];
+    heapifyDown(heap, 0);
+}
+
+HeapNode top(Heap* heap) {
+    return heap->data[0];
+}
+
+// Clean up stale, lazily deleted window elements clustered at the top of a heap
+void prune(Heap* heap, int window_start) {
+    while (heap->size > 0 && top(heap).idx < window_start) {
+        pop(heap);
+    }
+}
+
+double* medianSlidingWindow(int* nums, int numsSize, int k, int* returnSize) {
+    *returnSize = numsSize - k + 1;
+    double* result = (double*)malloc((*returnSize) * sizeof(double));
+    
+    // Heaps can dynamically expand to support full input buffer boundaries
+    Heap* max_heap = createHeap(numsSize, false); // Lower half
+    Heap* min_heap = createHeap(numsSize, true);  // Upper half
+    
+    int max_heap_valid_count = 0;
+    int min_heap_valid_count = 0;
+    
+    int res_idx = 0;
+    
+    for (int i = 0; i < numsSize; i++) {
+        // 1. Insert new entry
+        if (max_heap_valid_count == 0 || nums[i] <= top(max_heap).val) {
+            push(max_heap, nums[i], i);
+            max_heap_valid_count++;
+        } else {
+            push(min_heap, nums[i], i);
+            min_heap_valid_count++;
+        }
+        
+        // 2. Erase element falling off the rear sliding window threshold boundary
+        if (i >= k) {
+            int element_to_remove_idx = i - k;
+            long long val_to_remove = nums[element_to_remove_idx];
+            
+            // Deduct the valid balancer count based on which heap holds the expired number
+            prune(max_heap, i - k);
+            if (max_heap_valid_count > 0 && (val_to_remove < top(max_heap).val || 
+               (val_to_remove == top(max_heap).val && element_to_remove_idx <= top(max_heap).idx))) {
+                max_heap_valid_count--;
+            } else {
+                min_heap_valid_count--;
+            }
+        }
+        
+        // 3. Rebalance heaps so max_heap contains either equal or exactly 1 more item than min_heap
+        while (max_heap_valid_count > min_heap_valid_count + 1) {
+            prune(max_heap, i - k + 1);
+            HeapNode t = top(max_heap);
+            pop(max_heap);
+            push(min_heap, t.val, t.idx);
+            max_heap_valid_count--;
+            min_heap_valid_count++;
+        }
+        while (max_heap_valid_count < min_heap_valid_count) {
+            prune(min_heap, i - k + 1);
+            HeapNode t = top(min_heap);
+            pop(min_heap);
+            push(max_heap, t.val, t.idx);
+            min_heap_valid_count--;
+            max_heap_valid_count++;
+        }
+        
+        // 4. Calculate active tracking median once initial window constraints are satisfied
+        if (i >= k - 1) {
+            prune(max_heap, i - k + 1);
+            prune(min_heap, i - k + 1);
+            
+            if (k % 2 == 1) {
+                result[res_idx++] = (double)top(max_heap).val;
+            } else {
+                result[res_idx++] = ((double)top(max_heap).val + (double)top(min_heap).val) / 2.0;
+            }
+        }
+    }
+    
+    // Free allocations safely
+    free(max_heap->data); free(max_heap);
+    free(min_heap->data); free(min_heap);
+    
+    return result;
+}
+Accepted
+Runtime: 0 ms
+Case 1
+Case 2
+Input
+nums =
+[1,3,-1,-3,5,3,6,7]
+k =
+3
+Output
+[1.00000,-1.00000,-1.00000,3.00000,5.00000,6.00000]
+Expected
+[1.00000,-1.00000,-1.00000,3.00000,5.00000,6.00000]
